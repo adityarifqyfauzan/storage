@@ -21,7 +21,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"io/ioutil"
+	"io"
 	"os"
 	pathutil "path"
 	"time"
@@ -187,7 +187,7 @@ func (b OracleCSBackend) GetObject(path string) (Object, error) {
 	}
 
 	object.LastModified = rc.LastModified.Time
-	content, err := ioutil.ReadAll(rc.Content)
+	content, err := io.ReadAll(rc.Content)
 
 	if err != nil {
 		return object, err
@@ -202,7 +202,7 @@ func (b OracleCSBackend) PutObject(path string, content []byte) error {
 	objectname := pathutil.Join(b.Prefix, path)
 	metadata := make(map[string]string)
 	contentLen := int64(binary.Size(content))
-	contentBody := ioutil.NopCloser(bytes.NewBuffer(content))
+	contentBody := io.NopCloser(bytes.NewBuffer(content))
 
 	request := objectstorage.PutObjectRequest{
 		NamespaceName: &b.Namespace,
@@ -214,6 +214,22 @@ func (b OracleCSBackend) PutObject(path string, content []byte) error {
 	}
 
 	_, err := b.Client.PutObject(b.Context, request)
+	return err
+}
+
+func (b OracleCSBackend) PutObjectStream(ctx context.Context, path string, content io.Reader) error {
+	objectname := pathutil.Join(b.Prefix, path)
+	metadata := make(map[string]string)
+
+	request := objectstorage.PutObjectRequest{
+		NamespaceName: &b.Namespace,
+		BucketName:    &b.Bucket,
+		ObjectName:    &objectname,
+		PutObjectBody: io.NopCloser(content),
+		OpcMeta:       metadata,
+	}
+
+	_, err := b.Client.PutObject(ctx, request)
 	return err
 }
 

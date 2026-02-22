@@ -17,7 +17,8 @@ limitations under the License.
 package storage
 
 import (
-	"io/ioutil"
+	"context"
+	"io"
 	"os"
 	pathutil "path"
 	"time"
@@ -67,44 +68,44 @@ func NewBaiDuBOSBackend(bucket string, prefix string, endpoint string) *BaiduBOS
 
 // ListObjects lists all objects in Baidu Cloud BOS bucket, at prefix
 func (b BaiduBOSBackend) ListObjects(prefix string) ([]Object, error) {
-    var objects []Object
+	var objects []Object
 
-    prefix = pathutil.Join(b.Prefix, prefix)
-    listObjectsArgs := &api.ListObjectsArgs{
-        Prefix:  prefix,
-        Marker:  "",
-        MaxKeys: 1000,
-    }
-    for {
-        lor, err := b.Client.ListObjects(b.Bucket, listObjectsArgs)
-        if err != nil {
-            return objects, err
-        }
+	prefix = pathutil.Join(b.Prefix, prefix)
+	listObjectsArgs := &api.ListObjectsArgs{
+		Prefix:  prefix,
+		Marker:  "",
+		MaxKeys: 1000,
+	}
+	for {
+		lor, err := b.Client.ListObjects(b.Bucket, listObjectsArgs)
+		if err != nil {
+			return objects, err
+		}
 
-        for _, obj := range lor.Contents {
-            path := removePrefixFromObjectPath(prefix, obj.Key)
-            if objectPathIsInvalid(path) {
-                continue
-            }
-            lastModified, err := time.Parse(time.RFC3339, obj.LastModified)
-            if err != nil {
-                continue
-            }
-            object := Object{
-                Path:         path,
-                Content:      []byte{},
-                LastModified: lastModified,
-            }
-            objects = append(objects, object)
-        }
-        if !lor.IsTruncated {
-            break
-        }
-        listObjectsArgs.Prefix = lor.Prefix
-        listObjectsArgs.Marker = lor.NextMarker
-    }
+		for _, obj := range lor.Contents {
+			path := removePrefixFromObjectPath(prefix, obj.Key)
+			if objectPathIsInvalid(path) {
+				continue
+			}
+			lastModified, err := time.Parse(time.RFC3339, obj.LastModified)
+			if err != nil {
+				continue
+			}
+			object := Object{
+				Path:         path,
+				Content:      []byte{},
+				LastModified: lastModified,
+			}
+			objects = append(objects, object)
+		}
+		if !lor.IsTruncated {
+			break
+		}
+		listObjectsArgs.Prefix = lor.Prefix
+		listObjectsArgs.Marker = lor.NextMarker
+	}
 
-    return objects, nil
+	return objects, nil
 }
 
 // GetObject retrieves an object from Baidu Cloud BOS bucket, at prefix
@@ -119,7 +120,7 @@ func (b BaiduBOSBackend) GetObject(path string) (Object, error) {
 	}
 	body := bosObject.Body
 
-	content, err = ioutil.ReadAll(body)
+	content, err = io.ReadAll(body)
 	body.Close()
 	if err != nil {
 		return object, err
@@ -131,6 +132,9 @@ func (b BaiduBOSBackend) GetObject(path string) (Object, error) {
 		return object, err
 	}
 	lastModified, err := time.Parse(time.RFC1123, meta.LastModified)
+	if err != nil {
+		return object, err
+	}
 	object.LastModified = lastModified
 	return object, nil
 }
@@ -140,6 +144,13 @@ func (b BaiduBOSBackend) PutObject(path string, content []byte) error {
 	key := pathutil.Join(b.Prefix, path)
 	var err error
 	_, err = b.Client.PutObjectFromBytes(b.Bucket, key, content, nil)
+	return err
+}
+
+func (b BaiduBOSBackend) PutObjectStream(ctx context.Context, path string, content io.Reader) error {
+	key := pathutil.Join(b.Prefix, path)
+	var err error
+	_, err = b.Client.PutObjectFromStream(b.Bucket, key, content, nil)
 	return err
 }
 

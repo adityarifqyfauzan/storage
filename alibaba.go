@@ -18,7 +18,8 @@ package storage
 
 import (
 	"bytes"
-	"io/ioutil"
+	"context"
+	"io"
 	"net/http"
 	"os"
 	pathutil "path"
@@ -117,7 +118,7 @@ func (b AlibabaCloudOSSBackend) GetObject(path string) (Object, error) {
 	if err != nil {
 		return object, err
 	}
-	content, err = ioutil.ReadAll(body)
+	content, err = io.ReadAll(body)
 	body.Close()
 	if err != nil {
 		return object, err
@@ -142,6 +143,18 @@ func (b AlibabaCloudOSSBackend) PutObject(path string, content []byte) error {
 	} else {
 		sse := oss.ServerSideEncryption(b.SSE)
 		err = b.Bucket.PutObject(key, bytes.NewReader(content), sse)
+	}
+	return err
+}
+
+func (b AlibabaCloudOSSBackend) PutObjectStream(ctx context.Context, path string, content io.Reader) error {
+	key := pathutil.Join(b.Prefix, path)
+	var err error
+	if b.SSE == "" {
+		err = b.Bucket.PutObject(key, content)
+	} else {
+		sse := oss.ServerSideEncryption(b.SSE)
+		err = b.Bucket.PutObject(key, content, sse)
 	}
 	return err
 }

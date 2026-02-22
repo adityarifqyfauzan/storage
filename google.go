@@ -18,7 +18,7 @@ package storage
 
 import (
 	"context"
-	"io/ioutil"
+	"io"
 	pathutil "path"
 
 	"cloud.google.com/go/storage"
@@ -93,7 +93,7 @@ func (b GoogleCSBackend) GetObject(path string) (Object, error) {
 	if err != nil {
 		return object, err
 	}
-	content, err := ioutil.ReadAll(rc)
+	content, err := io.ReadAll(rc)
 	rc.Close()
 	if err != nil {
 		return object, err
@@ -111,6 +111,18 @@ func (b GoogleCSBackend) PutObject(path string, content []byte) error {
 	}
 	err = wc.Close()
 	return err
+}
+
+func (b GoogleCSBackend) PutObjectStream(ctx context.Context, path string, content io.Reader) error {
+	wc := b.Client.Object(pathutil.Join(b.Prefix, path)).NewWriter(ctx)
+
+	_, copyErr := io.Copy(wc, content)
+	closeErr := wc.Close()
+
+	if copyErr != nil {
+		return copyErr
+	}
+	return closeErr
 }
 
 // DeleteObject removes an object from Google Cloud Storage bucket, at prefix

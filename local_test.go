@@ -17,6 +17,7 @@ limitations under the License.
 package storage
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"testing"
@@ -51,6 +52,11 @@ func (suite *LocalTestSuite) TestGetObject() {
 
 func (suite *LocalTestSuite) TestPutObjectWithNonExistentPath() {
 	err := suite.LocalFilesystemBackend.PutObject("testdir/test/test.tgz", []byte("test content"))
+	suite.Nil(err)
+}
+
+func (suite *LocalTestSuite) TestPutObjectStreamWithNonExistentPath() {
+	err := suite.LocalFilesystemBackend.PutObjectStream(context.Background(), "testdir/test/test_stream.go", os.NewFile(0, "test-content"))
 	suite.Nil(err)
 }
 

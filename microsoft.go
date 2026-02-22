@@ -17,8 +17,9 @@ limitations under the License.
 package storage
 
 import (
+	"context"
 	"errors"
-	"io/ioutil"
+	"io"
 	pathutil "path"
 	"time"
 
@@ -138,7 +139,7 @@ func (b MicrosoftBlobBackend) GetObject(path string) (Object, error) {
 		return object, err
 	}
 
-	content, err = ioutil.ReadAll(readCloser)
+	content, err = io.ReadAll(readCloser)
 	if err != nil {
 		return object, err
 	}
@@ -163,6 +164,37 @@ func (b MicrosoftBlobBackend) PutObject(path string, content []byte) error {
 	}
 
 	return err
+}
+
+func (b MicrosoftBlobBackend) PutObjectStream(ctx context.Context, path string, content io.Reader) error {
+	if b.Container == nil {
+		return errors.New("Unable to obtain a container reference.")
+	}
+
+	blobReference := b.Container.GetBlobReference(pathutil.Join(b.Prefix, path))
+
+	err := blobReference.PutAppendBlob(nil)
+	if err != nil {
+		return err
+	}
+
+	buf := make([]byte, maxChunkSize)
+	for {
+		n, readErr := content.Read(buf)
+		if n > 0 {
+			if appendErr := blobReference.AppendBlock(buf[:n], nil); appendErr != nil {
+				return appendErr
+			}
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return readErr
+		}
+	}
+
+	return nil
 }
 
 func writeToBlob(content []byte, blobRef *microsoft_storage.Blob) error {

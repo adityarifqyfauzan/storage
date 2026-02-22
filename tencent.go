@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -146,7 +146,7 @@ func (t TencentCloudCOSBackend) GetObject(path string) (Object, error) {
 		return object, err
 	}
 
-	content, err = ioutil.ReadAll(resp.Body)
+	content, err = io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
 		return object, err
@@ -170,6 +170,17 @@ func (t TencentCloudCOSBackend) PutObject(path string, content []byte) error {
 
 	opt := &cos.ObjectPutOptions{}
 	_, err = t.Object.Put(context.Background(), key, bytes.NewReader(content), opt)
+
+	return err
+}
+
+func (t TencentCloudCOSBackend) PutObjectStream(ctx context.Context, path string, content io.Reader) error {
+
+	key := pathutil.Join(t.Prefix, path)
+	var err error
+
+	opt := &cos.ObjectPutOptions{}
+	_, err = t.Object.Put(ctx, key, content, opt)
 
 	return err
 }

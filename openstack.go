@@ -18,11 +18,12 @@ package storage
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	pathutil "path"
@@ -92,14 +93,14 @@ func NewOpenstackOSBackend(container string, prefix string, region string, caCer
 	// Create a custom HTTP client to handle reauth retry and custom CACERT if needed
 	roundTripper := ReauthRoundTripper{}
 	if caCert != "" {
-		caCert, err := ioutil.ReadFile(caCert)
+		caCert, err := os.ReadFile(caCert)
 		if err != nil {
 			panic(fmt.Sprintf("Openstack (ca certificates): %s", err))
 		}
 
 		caCertPool := x509.NewCertPool()
 		if !caCertPool.AppendCertsFromPEM(caCert) {
-			panic(fmt.Sprintf("Openstack (ca certificates): unable to read certificate bundle"))
+			panic("Openstack (ca certificates): unable to read certificate bundle")
 		}
 
 		transport := &http.Transport{
@@ -160,14 +161,14 @@ func NewOpenstackOSBackendV1Auth(container string, prefix string, caCert string)
 	// Create a custom HTTP client to handle custom CACERT if needed
 	httpTransport := http.DefaultTransport
 	if caCert != "" {
-		caCert, err := ioutil.ReadFile(caCert)
+		caCert, err := os.ReadFile(caCert)
 		if err != nil {
 			panic(fmt.Sprintf("Openstack (ca certificates): %s", err))
 		}
 
 		caCertPool := x509.NewCertPool()
 		if !caCertPool.AppendCertsFromPEM(caCert) {
-			panic(fmt.Sprintf("Openstack (ca certificates): unable to read certificate bundle"))
+			panic("Openstack (ca certificates): unable to read certificate bundle")
 		}
 
 		httpTransport = &http.Transport{
@@ -290,6 +291,14 @@ func (b OpenstackOSBackend) PutObject(path string, content []byte) error {
 	reader := bytes.NewReader(content)
 	createOpts := osObjects.CreateOpts{
 		Content: reader,
+	}
+	_, err := osObjects.Create(b.Client, b.Container, pathutil.Join(b.Prefix, path), createOpts).Extract()
+	return err
+}
+
+func (b OpenstackOSBackend) PutObjectStream(ctx context.Context, path string, content io.Reader) error {
+	createOpts := osObjects.CreateOpts{
+		Content: content,
 	}
 	_, err := osObjects.Create(b.Client, b.Container, pathutil.Join(b.Prefix, path), createOpts).Extract()
 	return err

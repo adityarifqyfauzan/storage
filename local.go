@@ -17,7 +17,8 @@ limitations under the License.
 package storage
 
 import (
-	"io/ioutil"
+	"context"
+	"io"
 	"os"
 
 	pathutil "path"
@@ -42,7 +43,7 @@ func NewLocalFilesystemBackend(rootDirectory string) *LocalFilesystemBackend {
 // ListObjects lists all objects in root directory (depth 1)
 func (b LocalFilesystemBackend) ListObjects(prefix string) ([]Object, error) {
 	var objects []Object
-	files, err := ioutil.ReadDir(pathutil.Join(b.RootDirectory, prefix))
+	files, err := os.ReadDir(pathutil.Join(b.RootDirectory, prefix))
 	if err != nil {
 		if os.IsNotExist(err) { // OK if the directory doesnt exist yet
 			err = nil
@@ -53,7 +54,11 @@ func (b LocalFilesystemBackend) ListObjects(prefix string) ([]Object, error) {
 		if f.IsDir() {
 			continue
 		}
-		object := Object{Path: f.Name(), Content: []byte{}, LastModified: f.ModTime()}
+		info, err := f.Info()
+		if err != nil {
+			continue
+		}
+		object := Object{Path: f.Name(), Content: []byte{}, LastModified: info.ModTime()}
 		objects = append(objects, object)
 	}
 	return objects, nil
@@ -64,7 +69,7 @@ func (b LocalFilesystemBackend) GetObject(path string) (Object, error) {
 	var object Object
 	object.Path = path
 	fullpath := pathutil.Join(b.RootDirectory, path)
-	content, err := ioutil.ReadFile(fullpath)
+	content, err := os.ReadFile(fullpath)
 	if err != nil {
 		return object, err
 	}
@@ -99,8 +104,74 @@ func (b LocalFilesystemBackend) PutObject(path string, content []byte) error {
 			return err
 		}
 	}
-	err = ioutil.WriteFile(fullpath, content, 0644)
+	err = os.WriteFile(fullpath, content, 0644)
 	return err
+}
+
+func (b LocalFilesystemBackend) PutObjectStream(ctx context.Context, path string, content io.Reader) error {
+	fullpath := pathutil.Join(b.RootDirectory, path)
+	folderPath := pathutil.Dir(fullpath)
+
+	if err := os.MkdirAll(folderPath, 0774); err != nil {
+		return err
+	}
+
+	// check if context is already canceled
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	tmpFile, err := os.CreateTemp(folderPath, "upload-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	// use context-aware copy
+	if _, err := copyWithContext(ctx, tmpFile, content); err != nil {
+		return err
+	}
+
+	// Check context before final rename
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	return os.Rename(tmpFile.Name(), fullpath)
+}
+
+// copyWithContext copies from src to dst while respecting context cancellation
+func copyWithContext(ctx context.Context, dst io.Writer, src io.Reader) (int64, error) {
+	buf := make([]byte, 32*1024)
+	var written int64
+
+	for {
+		if err := ctx.Err(); err != nil {
+			return written, err
+		}
+
+		nr, er := src.Read(buf)
+		if nr > 0 {
+			nw, ew := dst.Write(buf[:nr])
+			written += int64(nw)
+
+			if ew != nil {
+				return written, ew
+			}
+			if nr != nw {
+				return written, io.ErrShortWrite
+			}
+		}
+
+		if er != nil {
+			if er == io.EOF {
+				break
+			}
+			return written, er
+		}
+	}
+	return written, nil
 }
 
 // DeleteObject removes an object from root directory

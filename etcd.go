@@ -1,16 +1,18 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	pathutil "path"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.etcd.io/etcd/client/pkg/v3/transport"
+	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
 const DefaultPrefix = "/chart_backend_bucket"
@@ -38,21 +40,22 @@ type etcdStorage struct {
 	mu     sync.RWMutex
 }
 
-//connection cut off
+// connection cut off
 func isServerErr(err error) bool {
 	if err != nil {
-		if err == context.Canceled {
+		switch err {
+		case context.Canceled:
 			return false
-		} else if err == context.DeadlineExceeded {
+		case context.DeadlineExceeded:
 			return false
-		} else {
+		default:
 			return true
 		}
 	}
 	return false
 }
 
-//prapare {basepath} dir
+// prepare {basepath} dir
 func (e *etcdStorage) probe() error {
 	var (
 		err error
@@ -100,7 +103,6 @@ func (e *etcdStorage) delTimeStamp(path string) error {
 	return err
 }
 
-//
 func (e *etcdStorage) ListObjects(prefix string) ([]Object, error) {
 	var (
 		objs []Object
@@ -176,6 +178,15 @@ func (e *etcdStorage) PutObject(path string, content []byte) error {
 	} else {
 		return e.setTimeStamp(newpath, updatetime)
 	}
+}
+
+func (e *etcdStorage) PutObjectStream(ctx context.Context, path string, content io.Reader) error {
+	buf := new(bytes.Buffer)
+	_, err := io.Copy(buf, content)
+	if err != nil {
+		return err
+	}
+	return e.PutObject(path, buf.Bytes())
 }
 
 func (e *etcdStorage) DeleteObject(path string) error {
