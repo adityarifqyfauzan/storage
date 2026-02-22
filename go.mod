@@ -1,4 +1,4 @@
-module github.com/chartmuseum/storage
+module github.com/adityarifqyfauzan/storage
 
 go 1.23.0
 

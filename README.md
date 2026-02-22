@@ -4,6 +4,8 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/chartmuseum/storage)](https://goreportcard.com/report/github.com/chartmuseum/storage)
 [![GoDoc](https://godoc.org/github.com/chartmuseum/storage?status.svg)](https://godoc.org/github.com/chartmuseum/storage)
 
+*Forked from chartmuseum/storage* | *Modified to support streaming & content*
+
 Go library providing a common interface for working across multiple storage backends.
 
 Supported storage backends:
