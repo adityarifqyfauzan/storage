@@ -38,6 +38,7 @@ type Backend interface {
     ListObjects(prefix string) ([]Object, error)
     GetObject(path string) (Object, error)
     PutObject(path string, content []byte) error
+	PutObjectStream(ctx context.Context, path string, content io.Reader) error
     DeleteObject(path string) error
 }
 ```

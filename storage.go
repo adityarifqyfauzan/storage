@@ -17,7 +17,9 @@ limitations under the License.
 package storage
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 	"time"
@@ -51,6 +53,7 @@ type (
 		ListObjects(prefix string) ([]Object, error)
 		GetObject(path string) (Object, error)
 		PutObject(path string, content []byte) error
+		PutObjectStream(ctx context.Context, path string, content io.Reader) error
 		DeleteObject(path string) error
 	}
 )
